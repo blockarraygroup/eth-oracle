@@ -12,9 +12,9 @@ var program = require('commander');
 
 program
     .version(pkg.version)
-    .option('-u, --username', 'UPS username')
-    .option('-p, --password', 'UPS password')
-    .option('-l, --license', 'UPS license')
+    .option('-u, --username <value>', 'UPS username')
+    .option('-p, --password <value>', 'UPS password')
+    .option('-l, --license <value>', 'UPS license')
     .option('-t, --timeout <seconds>', 'Network connection timeout')
     .option('-d, --dispatch <address>', 'Address of the dispatch contract. Listening to events from here.')
     .option('-s, --sender <address>', 'Address of the sender account. Sending transactions from here.')
@@ -70,11 +70,12 @@ function sendRawTx(web3, rawTx, key) {
     var transaction = new tx(rawTx);
     transaction.sign(privateKey);
     var serializedTx = transaction.serialize().toString('hex');
-    console.log(serializedTx);
+    console.log("raw tx:", serializedTx);
     return web3.eth.sendSignedTransaction('0x' + serializedTx);
 }
 
 function process_query(query, opts, callback) {
+    console.log("request: ", query);
     var url = "https://wwwcie.ups.com/rest/Track"; // test
     if (!opts.test_mode) {
         url = "https://onlinetools.ups.com/rest/Track"; // prod
@@ -119,27 +120,62 @@ function process_query(query, opts, callback) {
             console.log('error code: '+ response.statusCode);
             console.log('error: '+ error);
             console.log(body);
-            callback.call(null, error || body || response.statusCode, null);
+            callback.call(null, error || body || response.statusCode || "internal error", null);
             return;
         }
-        callback.call(null, null, JSON.parse(body));
+        if (!body) {
+            console.error("empty response");
+            callback.call(null, "empty response", null);
+            return;
+        }
+        if ("undefined" !== typeof body["Fault"]) {
+            console.log(body["Fault"]["detail"]["Errors"]["ErrorDetail"]["PrimaryErrorCode"]["Description"]);
+            if(151018 === parseInt(body["Fault"]["detail"]["Errors"]["ErrorDetail"]["PrimaryErrorCode"]["Code"])) {
+                // treat this error as normal case
+                callback.call(null, null, 0);
+                return;
+            }
+            callback.call(null, body["Fault"]["detail"]["Errors"]["ErrorDetail"]["PrimaryErrorCode"]["Description"], null);
+            return;
+        }
+        var response = parseInt(body["TrackResponse"]["Response"]["ResponseStatus"]["Code"]);
+        if (1 !== response) {
+            console.error("unknown response:", response);
+            callback.call(null, "unknown response", null);
+            return;
+        }
+        callback.call(null, null, 1);
     });
 }
 
+////process_query("1Z12345E0205271687", opts, function (error, resp) { // test wrong code
+//process_query("1Z12345E0205271688", opts, function (error, resp) { // test good code
+//    if (error) {
+//        console.error(error);
+//        return;
+//    }
+//    console.log(resp);
+//});
+
+
 var web3 = new Web3(new Web3.providers.HttpProvider(opts.web3_provider, opts.timeout));
 var web3Socket = new Web3(new Web3.providers.WebsocketProvider(opts.web3_socket_provider, {timeout: opts.timeout}));
+
+//// use values printed by these lines in the query method of the SampleClient contract
+//console.log("Wrong:", (web3.utils.asciiToHex("1Z12345E0205271687")));
+//console.log("Good:", (web3.utils.asciiToHex("1Z12345E0205271688")));
 
 // https://ethereum.stackexchange.com/q/21048/34760
 var dispatchABI = [{"anonymous":false,"inputs":[{"indexed":false,"name":"id","type":"uint256"},{"indexed":false,"name":"recipient","type":"address"},{"indexed":false,"name":"query","type":"bytes"}],"name":"Incoming","type":"event"},{"constant":false,"inputs":[],"name":"kill","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":false,"inputs":[{"name":"_query","type":"bytes"}],"name":"query","outputs":[{"name":"id","type":"uint256"}],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":false,"inputs":[{"name":"addr","type":"address"}],"name":"setResponseAddress","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":false,"inputs":[{"name":"newOwner","type":"address"}],"name":"transferOwnership","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":true,"inputs":[],"name":"getResponseAddress","outputs":[{"name":"","type":"address"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"owner","outputs":[{"name":"","type":"address"}],"payable":false,"stateMutability":"view","type":"function"}];
 var contract = new web3Socket.eth.Contract(dispatchABI, opts.dispatch_address);
 contract.events.Incoming({fromBlock: 0}, function(error, event){
-    console.log("on watch"); 
+    //console.log("on watch"); 
     if (error) {
         console.error(error);
         return;
     }
-    console.log(event);
-    console.log(event.raw.data);
+    //console.log(event);
+    //console.log(event.raw.data);
     
     // Just a safety check
     if (event.address !== opts.dispatch_address) {
@@ -164,19 +200,22 @@ contract.events.Incoming({fromBlock: 0}, function(error, event){
             console.error(error);
             return;
         }
-        var response = resp["TrackResponse"]["Response"]["ResponseStatus"]["Code"];
     
-        console.log(data);
-        console.log('Incoming request: ' + queryId.toString('hex'));
-        console.log('  From: ' + sender);
-        console.log('  Query: ' + query);
-        console.log('  Response: ' + response);
+//        console.log(data);
+//        console.log('Incoming request: ' + queryId.toString('hex'));
+//        console.log('  From: ' + sender);
+//        console.log('  Query: ' + query);
+//        console.log('  Response: ' + resp);
 
         var tinyClientABI = [{"constant":false,"inputs":[{"name":"_id","type":"uint256"},{"name":"_response","type":"bytes"}],"name":"__tinyOracleCallback","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"}];
         var contractTinyClient = new web3.eth.Contract(tinyClientABI, sender);
 
         web3.eth.getTransactionCount(opts.sender_address).then(function(txCount) {
-            var data = contractTinyClient.methods.__tinyOracleCallback(queryId, web3.utils.asciiToHex(response)).encodeABI();
+            var _response = "0x01";
+            if (0 === resp) {
+                _response = "0x00";
+            }
+            var data = contractTinyClient.methods.__tinyOracleCallback(queryId, _response).encodeABI();
             var rawTx = {
                 nonce: web3.utils.toHex(txCount),
                 gasLimit: web3.utils.toHex(opts.gas_limit),
@@ -185,9 +224,9 @@ contract.events.Incoming({fromBlock: 0}, function(error, event){
                 value: web3.utils.toHex(0),
                 data: data
             };
-            console.log(rawTx);
+            //console.log("rawTx:", rawTx);
             sendRawTx(web3, rawTx, opts.sender_key).then(function(result) {
-                console.log(result);
+                console.log("sent transaction hash:", result["transactionHash"]);
             }).catch(console.error);
         }).catch(console.error);
     });
