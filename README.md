@@ -23,7 +23,7 @@ The `sender` address is an address from which callback function would be called.
 # Test
 
 1. Choose ropsten network in your MetaMask wallet.
-2. Cop the code below to the https://remix.ethereum.org editor and compile:
+2. Copy the code below to the https://remix.ethereum.org editor and compile:
 
 
 ```
