@@ -1,6 +1,33 @@
-# ups-oracle
+# Oracles - Smart Contract Data Provider
+![alt text](https://img.shields.io/badge/release-v0.2.5-green.svg "")  ![alt text](https://img.shields.io/badge/license-apache%202.0-blue.svg "") ![alt text](https://img.shields.io/badge/build-experimental-yellowgreen.svg "")
+## Overview
 
-The Ethereum oracle for UPS.com
+**Oracles** are smart contracts which have a connection to the outside world. Other contracts can request outside data from them. For example making HTTP GET/POST transactions to retrieve a status on a package delivery.
+
+
+## Acknowledgements
+
+Based of Alex Bergszaszi's original TinyOracle Smart Contract. 
+With Improvements from Oleg Abrosimov and Sam Bacha (Block Array Corporation)
+
+## License
+
+ > Copyright (C) Block Array Corporation
+  
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+ 
+     www.apache.org/licenses/LICENSE-2.0
+ 
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
+
+
+   <br>
+   <br>
 
 # Deploy
 
@@ -80,3 +107,12 @@ Go to the `Run` tab, choose SampleClient in a dropdown list, Enter the `0x42fb9e
 Call the `query` method without parameters to test tracking not found behavior.
 
 Call the `query` method with parameter `0x315a31323334354530323035323731363838` to test tracking found behavior.
+
+
+## Future Improvements
+
+Organize File Structure
+Add additional methods for querying
+Create AWS/Azure templates for 1-click launch
+Create notary digest of fetched data 
+
